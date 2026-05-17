@@ -14,7 +14,7 @@ def run_session_2():
     print("--- Starting Session 2 ---")
     for i, user_input in enumerate(session_2_inputs, 1):
         print(f"\n[Turn {i}] User: {user_input}")
-        response = run_agent(user_input)
+        response = run_agent(user_input,use_full_history=False)
         print(f"Agent: {response}")
     print("\n--- Session 2 Complete ---")
 

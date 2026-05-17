@@ -1,4 +1,4 @@
-from agent import run_agent
+from agent import run_agent,load_memory, save_memory, extract_learned_facts
 import os
 import json
 
@@ -31,8 +31,15 @@ def run_session_1():
             
     for i, user_input in enumerate(session_1_inputs, 1):
         print(f"\n[Turn {i}] User: {user_input}")
-        response = run_agent(user_input)
+        response = run_agent(user_input, use_full_history=True)
         print(f"Agent: {response}")
+
+     # --- NEW: End-of-session memory compression ---
+    final_memory = load_memory()
+    new_facts = extract_learned_facts(final_memory["conversation_history"])
+    final_memory["learned_facts"].extend(new_facts)
+    save_memory(final_memory)
+
     print("\n--- Session 1 Complete ---")
 
 if __name__ == "__main__":

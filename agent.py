@@ -36,6 +36,49 @@ def save_memory(memory):
     with open(MEMORY_FILE, "w") as f:
         json.dump(memory, f, indent=2)
 
+
+def extract_learned_facts(conversation_history):
+    """
+    Uses the LLM to extract key facts and commitments from a conversation.
+    """
+    print("\n--- Extracting Learned Facts ---")
+    
+    history_str = ""
+    for entry in conversation_history:
+        role = entry['role']
+        text = ""
+        for part in entry['parts']:
+            if 'text' in part:
+                text += part['text']
+        history_str += f"{role.capitalize()}: {text}\n"
+
+    prompt = (
+        "You are a summarization expert. Read the following conversation and extract key facts, decisions, and commitments made by the user. "
+        "Do not leave out any type of expense (eg. entertainment, groceries etc.)"
+        "Present them as a concise list of bullet points. Focus on things that will be important for future financial advice.\n\n"
+        "CONVERSATION:\n"
+        f"{history_str}\n\n"
+        "EXTRACTED FACTS:"
+    )
+
+    # Use the globally defined 'client' and 'MODEL' from the new SDK
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=prompt
+    )
+    
+    # Safely extract the text response
+    if response.text:
+        facts = response.text.strip().split('\n')
+        # Improved cleaning: removes various bullet styles like '-', '*', or '•'
+        cleaned_facts = [fact.lstrip('*-• ').strip() for fact in facts if fact.strip()]
+    else:
+        cleaned_facts = []
+        
+    print(f"Facts extracted: {cleaned_facts}")
+    return cleaned_facts
+
+
 def process_tool_result(fn_name, raw_result):
     """
     Processes raw tool output to perform calculations and return a summary.
@@ -83,7 +126,7 @@ def process_tool_result(fn_name, raw_result):
     # For other tools, return the result as is
     return raw_result
 
-def run_agent(user_input):
+def run_agent(user_input, use_full_history=True):
     if not user_input.strip():
         return "Please say something!"
 
@@ -96,7 +139,8 @@ def run_agent(user_input):
     # To maintain manual control, we must disable automatic_function_calling.
     config = types.GenerateContentConfig(
         system_instruction=(
-            f"You are a helpful finance companion for Priya Sharma. Today is {today}. "
+            f"You are a helpful finance companion. Today is {today}. "
+            f"You are a helpful finance companion for {memory['user_profile']['name']}. Her monthly income is ₹{memory['user_profile']['monthly_income_inr']}. "
             f"Base your advice on her stated goal: {memory['user_profile']['stated_goal']}. "
             "IMPORTANT:\n"
             "1. Use tools to get data. DO NOT make up numbers.\n"
@@ -115,18 +159,19 @@ def run_agent(user_input):
 
     # Convert stored history back to Content objects safely
     history = []
-    for msg in memory.get("conversation_history", []):
-        role = "model" if msg["role"] == "assistant" else msg["role"]
-        parts = []
-        for p in msg["parts"]:
-            if "text" in p:
-                parts.append(types.Part.from_text(text=p["text"]))
-            elif "function_call" in p:
-                parts.append(types.Part(function_call=types.FunctionCall(**p["function_call"])))
-            elif "function_response" in p:
-                parts.append(types.Part(function_response=types.FunctionResponse(**p["function_response"])))
-                
-        history.append(types.Content(role=role, parts=parts))
+    if use_full_history:
+        for msg in memory.get("conversation_history", []):
+            role = "model" if msg["role"] == "assistant" else msg["role"]
+            parts = []
+            for p in msg["parts"]:
+                if "text" in p:
+                    parts.append(types.Part.from_text(text=p["text"]))
+                elif "function_call" in p:
+                    parts.append(types.Part(function_call=types.FunctionCall(**p["function_call"])))
+                elif "function_response" in p:
+                    parts.append(types.Part(function_response=types.FunctionResponse(**p["function_response"])))
+                    
+            history.append(types.Content(role=role, parts=parts))
 
     # Create a chat session
     chat = client.chats.create(model=MODEL, config=config, history=history)
