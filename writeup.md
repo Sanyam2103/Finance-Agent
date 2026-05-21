@@ -1,4 +1,4 @@
-# AI Engineer Assignment: Writeup
+
 
 ## 1. Memory
 **What did you store after Session 1, and what did you deliberately *not* store? Why?**
